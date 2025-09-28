@@ -45,16 +45,32 @@ local function topological_sort(array: { Limb }, node: LimbInfo)
 	end
 end
 
-local function create_rig(root: LimbInfo): Identity
+local function create_rig(root: LimbInfo | { LimbInfo }): Identity
 	local limbs: { Limb } = {}
-	table.insert(limbs, {
-		name = root.name,
-		depends_on = "root",
-		c0 = root.c0,
-		c1 = root.c1:Inverse(),
-	})
+	local is_array = typeof(root) == "table" and root[1]
 
-	topological_sort(limbs, root)
+	if is_array then
+		for _, inner_root in root :: { LimbInfo } do
+			table.insert(limbs, {
+				name = inner_root.name,
+				depends_on = "root",
+				c0 = inner_root.c0,
+				c1 = inner_root.c1:Inverse(),
+			})
+
+			topological_sort(limbs, inner_root)
+		end
+	else
+		local type_fix_root = root :: LimbInfo
+		table.insert(limbs, {
+			name = type_fix_root.name,
+			depends_on = "root",
+			c0 = type_fix_root.c0,
+			c1 = type_fix_root.c1:Inverse(),
+		})
+
+		topological_sort(limbs, type_fix_root)
+	end
 
 	local limb_transforms: { LimbTransform } = {}
 	local limb_name_to_index: { [string]: number } = {}

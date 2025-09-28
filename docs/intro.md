@@ -50,3 +50,42 @@ crunchyroll_animation.solve_animation(rig, {
 -- placed into a result table for optimal performance
 local left_arm_cframe = rig.result_coordinate_frames["Left Arm"]
 ```
+
+# Example with AnimationConstraints or Motor6D
+
+```luau
+... solve animation above
+
+local joint_lookup = {
+	["Head"] = character.Torso.Neck,
+	["Right Arm"] = character.Torso["Right Shoulder"],
+	["Left Arm"] = character.Torso["Left Shoulder"],
+	["Right Leg"] = character.Torso["Right Hip"],
+	["Left Leg"] = character.Torso["Left Hip"],
+	["Torso"] = character.HumanoidRootPart.RootJoint,
+	["ExtraJoint"] = character.HumanoidRootPart.ExtraJoint,
+}
+
+-- find the limb
+for index, joint in rig.limbs do
+	local limb_transform = rig.limb_transforms[index]
+
+	-- find the transformation
+	local position = limb_transform.position
+	local quat_vector = limb_transform.quat_vector
+	local quat_scalar = limb_transform.quat_scalar
+
+	local transform = CFrame.new(
+		position.x,
+		position.y,
+		position.z,
+		quat_vector.x,
+		quat_vector.y,
+		quat_vector.z,
+		quat_scalar
+	)
+
+	-- apply the Transform here
+	joint_lookup[joint.name].Transform = transform
+end
+```

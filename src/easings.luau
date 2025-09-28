@@ -121,6 +121,25 @@ local function constant(Value: number): number
 	return 0
 end
 
+local function cubic_hermite(
+	position_1: number,
+	position_2: number,
+	tangent_1: number,
+	tangent_2: number,
+	t: number
+)
+	return math.lerp(position_1, position_2, t)
+	-- local t2 = t * t
+	-- local t3 = t2 * t
+
+	-- local h00 = 2 * t3 - 3 * t2 + 1
+	-- local h10 = t3 - 2 * t2 + t
+	-- local h01 = -2 * t3 + 3 * t2
+	-- local h11 = t3 - t2
+
+	-- return h00 * position_1 + h10 * tangent_1 + h01 * position_2 + h11 * tangent_2
+end
+
 return {
 	linear = linear,
 
@@ -137,4 +156,6 @@ return {
 	elastic_in = elastic_in,
 	elastic_out = elastic_out,
 	elastic_in_out = elastic_in_out,
+
+	tangent = cubic_hermite,
 }

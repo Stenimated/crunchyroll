@@ -12,6 +12,10 @@ local BOUNCE = Enum.PoseEasingStyle.Bounce
 local ELASTIC = Enum.PoseEasingStyle.Elastic
 local CONSTANT = Enum.PoseEasingStyle.Constant
 
+local CUBIC_WITH_TANGENT = Enum.KeyInterpolationMode.Cubic
+local CURVE_POSE_LINEAR = Enum.KeyInterpolationMode.Linear
+local CURVE_POSE_CONSTANT = Enum.KeyInterpolationMode.Constant
+
 return {
 	[LINEAR] = {
 		[EASING_IN] = easings.linear,
@@ -42,4 +46,7 @@ return {
 		[EASING_OUT] = easings.constant,
 		[EASING_IN_OUT] = easings.constant,
 	},
+
+	[CURVE_POSE_CONSTANT] = easings.constant,
+	[CURVE_POSE_LINEAR] = easings.linear,
 }

@@ -17,3 +17,15 @@ local keyframe_sequence = ReplicatedStorage.assets.walking_keyframe_sequence
 
 crunchyroll.load_keyframe_sequence(keyframe_sequence)
 ```
+
+You can use `AnimationClipProvider`[https://create.roblox.com/docs/reference/engine/classes/
+AnimationClipProvider#GetAnimationClipAsync] or `KeyframeSequenceProvider`[https://create.roblox.com/docs/reference/engine/classes/KeyframeSequenceProvider#GetKeyframeSequenceAsync] to get the `KeyframeSequence`, even in runtime.
+
+```lua
+local crunchyroll = require(path.to.crunchyroll)
+local AnimationClipProvider = game:GetService("AnimationClipProvider")
+
+local keyframe_sequence = AnimationClipProvider:GetAnimationClipAsync("rbxassetid://....") -- or Animation.AnimationId
+
+crunchyroll.load_keyframe_sequence(keyframe_sequence)
+```

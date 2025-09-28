@@ -1,5 +1,6 @@
 local animation_asset = require("./roblox/animation_asset")
 local create_rig = require("./rig")
+local easings = require(script.Parent.easings)
 
 export type AnimationTrack = {
 	-- 0-1
@@ -111,11 +112,11 @@ local function animation_solver(
 			-- find hulls in the animation
 			local left_pose = poses_before and poses_before[index]
 			local time_before = pose_time_before
-			if left_pose == nil then
-				local left_pose_pointer = if animation.keyframe_hulls[index]
-					then animation.keyframe_hulls[index][high][1]
-					else 1
-
+			local left_pose_pointer = if animation.keyframe_hulls[index]
+					and animation.keyframe_hulls[index][high]
+				then animation.keyframe_hulls[index][high][1]
+				else 1
+			if left_pose_pointer then
 				left_pose = animation.keyframe_poses[left_pose_pointer][index]
 				time_before = keyframe_times[left_pose_pointer]
 			end
@@ -130,31 +131,112 @@ local function animation_solver(
 				time_after = keyframe_times[right_pose_pointer]
 			end
 
-			--stylua: ignore start
-			if left_pose and right_pose  then
-				local alpha = left_pose.easing_function((real_time - (time_before :: number)) / ((time_after :: number) - (time_before :: number)))
-				local position = vector_lerp(left_pose.position, right_pose.position, alpha)
+			if left_pose and right_pose then
+			    --stylua: ignore
+			    local alpha = (real_time - (time_before :: number)) / ((time_after :: number) - (time_before :: number))
+				if left_pose.type == "n" then
+				    --stylua: ignore start
+					local interpolated_alpha = left_pose.easing_function(alpha)
+					local position = vector_lerp(left_pose.position, right_pose.position, interpolated_alpha)
 
-				local quat_vector, quat_scalar = quat_nlerp(
-					left_pose.quat_vector, left_pose.quat_scalar,
-					right_pose.quat_vector, right_pose.quat_scalar,
-					alpha
-				)
+					local quat_vector, quat_scalar = quat_nlerp(
+						left_pose.quat_vector, left_pose.quat_scalar,
+						right_pose.quat_vector, right_pose.quat_scalar,
+						interpolated_alpha
+					)
 
-				node.position = vector_lerp(node.position, position, influence)
-				node.quat_vector, node.quat_scalar = quat_nlerp(
-					node.quat_vector, node.quat_scalar,
-					quat_vector, quat_scalar,
-					influence
-				)
+					node.position = vector_lerp(node.position, position, influence)
+					node.quat_vector, node.quat_scalar = quat_nlerp(
+						node.quat_vector, node.quat_scalar,
+						quat_vector, quat_scalar,
+						influence
+					)
+
+					--stylua: ignore end
+				elseif left_pose.type == "t" then
+					local transfrom_left, transform_right =
+						left_pose.transform, right_pose.transform
+					local tangents, easing = left_pose.tangents, left_pose.easing
+
+					local x1, y1, z1, rx1, ry1, rz1 =
+						transfrom_left[1],
+						transfrom_left[2],
+						transfrom_left[3],
+						transfrom_left[4],
+						transfrom_left[5],
+						transfrom_left[6]
+					local x2, y2, z2, rx2, ry2, rz2 =
+						transform_right[1],
+						transform_right[2],
+						transform_right[3],
+						transform_right[4],
+						transform_right[5],
+						transform_right[6]
+
+					local t1, t2, t3, t4, t5, t6 =
+						tangents[1],
+						tangents[1],
+						tangents[1],
+						tangents[1],
+						tangents[1],
+						tangents[1]
+
+					local x = if t1
+						then easings.tangent(x1, x2, t1[1], t1[2], alpha)
+						else math.lerp(x1, x2, easing[1](alpha))
+					local y = if t2
+						then easings.tangent(y1, y2, t2[1], t2[2], alpha)
+						else math.lerp(y1, y2, easing[2](alpha))
+					local z = if t3
+						then easings.tangent(z1, z2, t3[1], t3[2], alpha)
+						else math.lerp(z1, z2, easing[3](alpha))
+					local rx = if t4
+						then easings.tangent(rx1, rx2, t4[1], t4[2], alpha)
+						else math.lerp(rx1, rx2, easing[4](alpha))
+					local ry = if t5
+						then easings.tangent(ry1, ry2, t5[1], t5[2], alpha)
+						else math.lerp(ry1, ry2, easing[5](alpha))
+					local rz = if t6
+						then easings.tangent(rz1, rz2, t6[1], t6[2], alpha)
+						else math.lerp(rz1, rz2, easing[6](alpha))
+
+					local cx, cy, cz = math.cos(rx / 2), math.cos(ry / 2), math.cos(rz / 2)
+					local sx, sy, sz = math.sin(rx / 2), math.sin(ry / 2), math.sin(rz / 2)
+
+					local quat_vector = vector.create(
+						sx * cy * cz - cx * sy * sz, -- X
+						cx * sy * cz + sx * cy * sz, -- Y
+						cx * cy * sz - sx * sy * cz -- Z
+					)
+					local quat_scalar = cx * cy * cz + sx * sy * sz
+
+					node.position = vector.create(x, y, z)
+					node.quat_vector, node.quat_scalar = quat_vector, quat_scalar
+
+					-- local x = math.lerp(x1, x2, alpha)
+					-- local y = math.lerp(y1, y2, alpha)
+					-- local z = math.lerp(z1, z2, alpha)
+					-- local rx = math.lerp(rx1, rx2, alpha)
+					-- local ry = math.lerp(ry1, ry2, alpha)
+					-- local rz = math.lerp(rz1, rz2, alpha)
+
+					-- if rig.limbs[index].name == "Left Arm" then
+					-- 	-- print("zz", high + 1, "highest", )
+					-- 	-- print("keyframe_times", keyframe_times)
+					-- 	-- print("real time", real_time)
+					-- end
+				end
 
 				node.priority = priority
 			elseif left_pose then
 				node.position = vector_lerp(node.position, left_pose.position, influence)
 
 				node.quat_vector, node.quat_scalar = quat_nlerp(
-					node.quat_vector, node.quat_scalar,
-					left_pose.quat_vector, left_pose.quat_scalar, influence
+					node.quat_vector,
+					node.quat_scalar,
+					left_pose.quat_vector,
+					left_pose.quat_scalar,
+					influence
 				)
 				node.priority = priority
 			end

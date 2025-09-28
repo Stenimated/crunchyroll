@@ -1,4 +1,5 @@
-local KeyframeSequenceProvider = game:GetService("KeyframeSequenceProvider")
+local AnimationClipProvider = game:GetService("AnimationClipProvider")
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -48,7 +49,7 @@ local function preview_roblox(rig, keyframe_sequence)
 
 	local animator = spawned_rig.Humanoid.Animator
 	local animation = Instance.new("Animation")
-	animation.AnimationId = KeyframeSequenceProvider:RegisterKeyframeSequence(keyframe_sequence)
+	animation.AnimationId = AnimationClipProvider:RegisterAnimationClip(keyframe_sequence)
 
 	local track = animator:LoadAnimation(animation)
 
@@ -64,6 +65,7 @@ local function apply_cframe(character, rig)
 
 	character["Torso"].CFrame = rig.result_coordinate_frames["Torso"]
 	character["Head"].CFrame = rig.result_coordinate_frames["Head"]
+	character["ExtraJoint"].CFrame = rig.result_coordinate_frames["ExtraJoint"]
 end
 
 -- one keyframe
@@ -96,6 +98,7 @@ for _, keyframe_sequence in
 		ReplicatedStorage.assets.animation_with_hulls,
 		ReplicatedStorage.assets.wave_5_step,
 		ReplicatedStorage.assets.lift_left_arm,
+		ReplicatedStorage.assets.joint_animation,
 	}
 do
 	local character = spawn_character()
@@ -112,6 +115,7 @@ do
 		["Right Leg"] = motor_6dcharacter.Torso["Right Hip"],
 		["Left Leg"] = motor_6dcharacter.Torso["Left Hip"],
 		["Torso"] = motor_6dcharacter.HumanoidRootPart.RootJoint,
+		["ExtraJoint"] = motor_6dcharacter.HumanoidRootPart.ExtraJoint,
 	}
 
 	local alpha = 0
@@ -156,4 +160,39 @@ do
 			joint_lookup[joint.name].Transform = transform
 		end
 	end)
+end
+
+-- curve animations
+do
+	local character = spawn_character()
+	local rig = crunchyroll.create_rig(rig_template)
+	local animation =
+		crunchyroll.load_curve_animation(ReplicatedStorage.assets.curve_animation_simple, rig)
+	preview_roblox(character, ReplicatedStorage.assets.curve_animation_simple)
+
+	print("rig", rig)
+	print("animation", animation)
+	local alpha = 0
+
+	while true do
+		local delta_time = task.wait(0)
+		-- loop the animation
+		alpha += delta_time / animation.length
+		alpha %= 1
+
+		-- HumanoidRootPart.CFrame for the root CFrame
+		crunchyroll.solve_animation(rig, {
+			[animation] = {
+				priority = 1,
+
+				start_fade_time = 0,
+				stop_fade_time = 0,
+				weight = 1,
+
+				alpha = alpha,
+			},
+		}, character.HumanoidRootPart.CFrame)
+
+		apply_cframe(character, rig)
+	end
 end
