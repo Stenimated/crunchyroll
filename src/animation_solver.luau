@@ -13,6 +13,11 @@ export type AnimationTrack = {
 	-- arbitrary number
 	priority: number,
 }
+type total_weight = {
+	previous: total_weight?,
+	total: number,
+	tracks: { [animation_asset.Identity]: number },
+}
 
 local function quat_nlerp(
 	a_vector: vector,
@@ -30,19 +35,18 @@ local function quat_nlerp(
 	return quat_vector / magnitude, quat_scalar / magnitude
 end
 
+--- https://www.desmos.com/calculator/9wt45xeilg
+--- difference is you pass in the time with animation length, not alpha
 local function solve_fade_time_influence(
-	real_time: number,
+	time: number,
 	animation_length: number,
 	start_fade_time: number,
 	stop_fade_time: number
 ): number
-	if real_time <= start_fade_time then
-		return math.min(1, 1 - ((start_fade_time - real_time) / start_fade_time))
-	elseif real_time >= (animation_length + stop_fade_time) then
-		return math.min(
-			1,
-			1 - ((real_time - (animation_length - stop_fade_time)) / stop_fade_time)
-		)
+	if time <= start_fade_time then
+		return math.min(1, 1 - ((start_fade_time - time) / start_fade_time))
+	elseif time >= (animation_length - stop_fade_time) then
+		return math.min(1, 1 - ((time - (animation_length - stop_fade_time)) / stop_fade_time))
 	else
 		return 1
 	end
@@ -59,25 +63,173 @@ local function animation_solver(
 	for _, limb in limb_transforms do
 		limb.priority = -1
 	end
+	-- local id = math.random()
 
-	local total_weight = 0
-	for _, track in tracks do
-		total_weight += track.weight
+	--- [limb_index][priority] = [singly linked list]
+	--- linked list starts from the highest priority and ends at the lowest priority
+	local limbs_total_weights: { [number]: { [number]: total_weight, highest_priority: number } } =
+		{}
+
+	-- local isDebug = false
+	-- if tracks["debug"] then
+	-- 	isDebug = true
+	-- 	tracks["debug"] = nil
+	-- end
+
+	for limb_index, weight in rig.limbs do
+		local previously_created
+
+		for animation, track in tracks do
+			local animation_weight = track.weight
+				* solve_fade_time_influence(
+					animation.length * track.alpha,
+					animation.length,
+					track.start_fade_time,
+					track.stop_fade_time
+				)
+
+			local limb_weight = animation_weight
+			if not animation.animated[limb_index] then
+				limb_weight = 0
+			end
+
+			local total_weights: { [number]: total_weight, highest_priority: number } =
+				limbs_total_weights[limb_index]
+			if not total_weights then
+				total_weights = { highest_priority = -math.huge }
+				limbs_total_weights[limb_index] = total_weights
+			end
+
+			if not total_weights[track.priority] then
+				local info = {
+					previous = nil,
+					total = limb_weight,
+					tracks = { [animation] = limb_weight },
+					priority = track.priority,
+				}
+				total_weights[track.priority] = info
+
+				if track.priority > total_weights.highest_priority then
+					total_weights.highest_priority = track.priority
+				end
+				if previously_created then
+					if previously_created.priority > track.priority then
+						if previously_created.previous then
+							if previously_created.previous.priority < track.priority then
+								local splice = previously_created.previous
+								previously_created.previous = info
+								info.previous = splice
+								-- print("insert")
+								-- print("existing + splice scenario", id)
+							else
+								info.previous = previously_created.previous
+								-- print("ah")
+								-- print("existing + lower priority", id)
+							end
+						else
+							if previously_created.priority < track.priority then
+								info.previous = previously_created
+								-- print("none + lower priority", id)
+								-- print("b")
+							else
+								previously_created.previous = info
+								-- print("none + higher priority", id)
+								-- print(
+								-- 	"ga",
+								-- 	previously_created.priority,
+								-- 	info.priority,
+								-- 	total_weights,
+								-- 	animation_weight,
+								-- 	track.weight,
+								-- 	limb_weight,
+								-- 	info
+								-- )
+							end
+						end
+					end
+				end
+				previously_created = info
+
+				-- if limb_index == 6 and isDebug then
+				-- 	if info.priority == 1 then
+				-- 		print("priorityy one", limbs_total_weights[6], info)
+				-- 	elseif info.priority == 2 then
+				-- 		print(
+				-- 			"priorityy twoo",
+				-- 			limbs_total_weights[6],
+				-- 			info,
+				-- 			previously_created
+				-- 		)
+				-- 	end
+				-- end
+			else
+				total_weights[track.priority].total += limb_weight
+				total_weights[track.priority].tracks[animation] = limb_weight
+			end
+		end
 	end
+
+	for index, joint in limbs_total_weights do
+		local hp = joint[joint.highest_priority]
+		if hp and hp.total < 1 then
+			-- this is the precentage we have to fill
+			local left = 1 - hp.total
+
+			-- if index == 6 and isDebug then
+			-- 	print("joints", joint, "id", id)
+			-- end
+
+			local leaf = hp
+			while leaf and left > 0 do
+				local next = leaf.previous
+
+				if next then
+					if next.total <= left then
+						left -= next.total -- just eat this up
+						-- if isDebug then
+						-- 	print(next.total)
+						-- end
+					else
+						-- map the new inflence
+						local new_precentage, total_current = left, next.total
+						for animation, weight in next.tracks do
+							local track_inflence = weight / total_current
+							next.tracks[animation] = new_precentage * track_inflence
+						end
+						next.total = new_precentage
+						-- if isDebug then
+						-- 	print(next.total)
+						-- end
+					end
+				end
+				leaf = next
+			end
+		else
+			local leaf = hp
+			while leaf do
+				local next = leaf.previous
+				if next then
+					next.total = 0
+				end
+				leaf = next
+			end
+		end
+	end
+
+	-- if isDebug then
+	-- 	for _, v in tracks do
+	-- 		if v.priority == 2 then
+	-- 			-- print(limbs_total_weights[6])
+	-- 			-- print(limbs_total_weights[rig.limb_name_to_index["Left Arm"]][2].total)
+	-- 		end
+	-- 	end
+	-- end
 
 	for animation, playback in tracks do
 		local priority = playback.priority
 		local real_time = animation.length * playback.alpha
-		local influence = (playback.weight / total_weight)
-			* solve_fade_time_influence(
-				real_time,
-				animation.length,
-				playback.start_fade_time,
-				playback.stop_fade_time
-			)
 
 		-- Figure out which keyframes to interpolate between
-
 		local keyframe_times = animation.keyframe_times
 
 		local high: number = #keyframe_times
@@ -100,9 +252,25 @@ local function animation_solver(
 
 		-- Solve limb transforms
 		for index, node in limb_transforms do
-			if node.priority > priority then
+			local kaioken = limbs_total_weights[index]
+			if not kaioken then
 				continue
 			end
+
+			local priority_list = kaioken[priority]
+			if not priority_list or priority_list.total == 0 then
+				continue
+			end
+
+			local influence = priority_list.tracks[animation]
+			if influence == 0 then -- this is not playing
+				continue
+			end
+			-- if isDebug and priority == 2 then
+			-- 	print("ok", influence, priority_list)
+			-- elseif isDebug and priority == 1 then
+			-- 	print("bruh", influence)
+			-- end
 
 			-- find holes in the animation
 			local left_pose = poses_before and poses_before[index]
@@ -144,7 +312,7 @@ local function animation_solver(
 					influence
 				)
 
-				node.priority = priority
+				-- node.priority = priority
 			elseif left_pose then
 				node.position = vector.lerp(node.position, left_pose.position, influence)
 
@@ -152,7 +320,7 @@ local function animation_solver(
 					node.quat_vector, node.quat_scalar,
 					left_pose.quat_vector, left_pose.quat_scalar, influence
 				)
-				node.priority = priority
+				-- node.priority = priority
 			end
 			--stylua: ignore end
 		end

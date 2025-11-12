@@ -40,19 +40,17 @@ local function spawn_motor_character(derived)
 	return spawned_rig
 end
 
-local function preview_roblox(rig, keyframe_sequence)
-	local spawned_rig = character_joints_template:Clone()
-	spawned_rig:PivotTo(CFrame.new(0, 6, 0) * rig:GetPivot())
-
-	spawned_rig.Parent = workspace :: any
-
+local function load_roblox(spawned_rig, keyframe_sequence): AnimationTrack
 	local animator = spawned_rig.Humanoid.Animator
 	local animation = Instance.new("Animation")
 	animation.AnimationId = KeyframeSequenceProvider:RegisterKeyframeSequence(keyframe_sequence)
-
-	local track = animator:LoadAnimation(animation)
-
-	track:Play()
+	return animator:LoadAnimation(animation)
+end
+local function preview_roblox(rig)
+	local spawned_rig = character_joints_template:Clone()
+	spawned_rig:PivotTo(CFrame.new(0, 6, 0) * rig:GetPivot())
+	spawned_rig.Parent = workspace :: any
+	return spawned_rig
 end
 
 local function apply_cframe(character, rig)
@@ -106,7 +104,7 @@ for _, keyframe_sequence in
 do
 	local character = spawn_character()
 	local motor_6dcharacter = spawn_motor_character(character)
-	preview_roblox(motor_6dcharacter, keyframe_sequence)
+	load_roblox(preview_roblox(motor_6dcharacter), keyframe_sequence):Play()
 
 	local rig = crunchyroll.create_rig(rig_template)
 	local animation = crunchyroll.load_keyframe_sequence(keyframe_sequence, rig)
@@ -139,6 +137,201 @@ do
 
 				alpha = alpha,
 			},
+		}, character.HumanoidRootPart.CFrame)
+
+		apply_cframe(character, rig)
+
+		for index, joint in rig.limbs do
+			local limb_transform = rig.limb_transforms[index]
+
+			local position = limb_transform.position
+			local quat_vector = limb_transform.quat_vector
+			local quat_scalar = limb_transform.quat_scalar
+
+			local transform = CFrame.new(
+				position.x,
+				position.y,
+				position.z,
+				quat_vector.x,
+				quat_vector.y,
+				quat_vector.z,
+				quat_scalar
+			)
+
+			if joint_lookup[joint.name] then
+				joint_lookup[joint.name].Transform = transform
+			end
+		end
+	end)
+end
+
+-- run two animations with different priority
+do
+	local keyframe_sequence = ReplicatedStorage.assets.walk
+	local action_sequence = ReplicatedStorage.assets.wave_5_step
+
+	local character = spawn_character()
+	local motor_6dcharacter = spawn_motor_character(character)
+	local roblox_rig = preview_roblox(motor_6dcharacter)
+	load_roblox(roblox_rig, keyframe_sequence):Play()
+	local acition_roblox_aniamtion = load_roblox(roblox_rig, action_sequence)
+	acition_roblox_aniamtion.Priority = Enum.AnimationPriority.Action2
+	acition_roblox_aniamtion.Looped = false
+
+	local rig = crunchyroll.create_rig(rig_template)
+	local animation = crunchyroll.load_keyframe_sequence(keyframe_sequence, rig)
+	local action_animation = crunchyroll.load_keyframe_sequence(action_sequence, rig)
+
+	local joint_lookup = {
+		["ExtraJoint"] = motor_6dcharacter.HumanoidRootPart.ExtraJoint,
+		["Head"] = motor_6dcharacter.Torso.Neck,
+		["Right Arm"] = motor_6dcharacter.Torso["Right Shoulder"],
+		["Left Arm"] = motor_6dcharacter.Torso["Left Shoulder"],
+		["Right Leg"] = motor_6dcharacter.Torso["Right Hip"],
+		["Left Leg"] = motor_6dcharacter.Torso["Left Hip"],
+		["Torso"] = motor_6dcharacter.HumanoidRootPart.RootJoint,
+	}
+
+	local action_alpha = -1
+	local stop_fade_time = 0.3
+	task.spawn(function()
+		while true do
+			action_alpha = 0
+			acition_roblox_aniamtion:Play()
+			while action_alpha < 1 do
+				action_alpha += task.wait() / action_animation.length
+			end
+			action_alpha = -1
+			task.wait(3) -- exhaust
+		end
+	end)
+
+	local alpha = 0
+
+	RunService.RenderStepped:Connect(function(delta_time)
+		-- loop the animation
+		alpha += delta_time / animation.length
+		alpha %= 1
+
+		-- HumanoidRootPart.CFrame for the root CFrame
+		crunchyroll.solve_animation(rig, {
+
+			[animation] = {
+				priority = 1,
+
+				start_fade_time = 0,
+				stop_fade_time = 0,
+				weight = 1,
+
+				alpha = alpha,
+			},
+			[action_animation] = if action_alpha > 0
+				then {
+					priority = 2,
+					start_fade_time = 0.4,
+					stop_fade_time = stop_fade_time,
+					weight = 1,
+					alpha = action_alpha,
+				}
+				else nil,
+		}, character.HumanoidRootPart.CFrame)
+
+		apply_cframe(character, rig)
+
+		for index, joint in rig.limbs do
+			local limb_transform = rig.limb_transforms[index]
+
+			local position = limb_transform.position
+			local quat_vector = limb_transform.quat_vector
+			local quat_scalar = limb_transform.quat_scalar
+
+			local transform = CFrame.new(
+				position.x,
+				position.y,
+				position.z,
+				quat_vector.x,
+				quat_vector.y,
+				quat_vector.z,
+				quat_scalar
+			)
+
+			if joint_lookup[joint.name] then
+				joint_lookup[joint.name].Transform = transform
+			end
+		end
+	end)
+end
+
+-- run two animations with different priority, the higher priority is running exclusively on one limb
+do
+	local keyframe_sequence = ReplicatedStorage.assets.walk
+	local action_sequence = ReplicatedStorage.assets.lift_left_arm
+
+	local character = spawn_character()
+	local motor_6dcharacter = spawn_motor_character(character)
+	local roblox_rig = preview_roblox(motor_6dcharacter)
+	load_roblox(roblox_rig, keyframe_sequence):Play()
+	local acition_roblox_aniamtion = load_roblox(roblox_rig, action_sequence)
+	acition_roblox_aniamtion.Priority = Enum.AnimationPriority.Action2
+	acition_roblox_aniamtion.Looped = false
+
+	local rig = crunchyroll.create_rig(rig_template)
+	local animation = crunchyroll.load_keyframe_sequence(keyframe_sequence, rig)
+	local action_animation = crunchyroll.load_keyframe_sequence(action_sequence, rig)
+
+	print("action", action_animation)
+	print("rig", rig)
+	local joint_lookup = {
+		["ExtraJoint"] = motor_6dcharacter.HumanoidRootPart.ExtraJoint,
+		["Head"] = motor_6dcharacter.Torso.Neck,
+		["Right Arm"] = motor_6dcharacter.Torso["Right Shoulder"],
+		["Left Arm"] = motor_6dcharacter.Torso["Left Shoulder"],
+		["Right Leg"] = motor_6dcharacter.Torso["Right Hip"],
+		["Left Leg"] = motor_6dcharacter.Torso["Left Hip"],
+		["Torso"] = motor_6dcharacter.HumanoidRootPart.RootJoint,
+	}
+
+	local action_alpha = -1
+	local stop_fade_time = 0.3
+	task.spawn(function()
+		while true do
+			action_alpha = 0
+			acition_roblox_aniamtion:Play()
+			while action_alpha < 1 do
+				action_alpha += task.wait() / action_animation.length
+			end
+			action_alpha = -1
+			task.wait(3) -- exhaust
+		end
+	end)
+
+	local alpha = 0
+	RunService.RenderStepped:Connect(function(delta_time)
+		-- loop the animation
+		alpha += delta_time / animation.length
+		alpha %= 1
+
+		-- HumanoidRootPart.CFrame for the root CFrame
+		crunchyroll.solve_animation(rig, {
+			-- debug = true,
+			[animation] = {
+				priority = 1,
+
+				start_fade_time = 0,
+				stop_fade_time = 0,
+				weight = 1,
+
+				alpha = alpha,
+			},
+			[action_animation] = if action_alpha > 0
+				then {
+					priority = 2,
+					start_fade_time = 0.2,
+					stop_fade_time = stop_fade_time,
+					weight = 1,
+					alpha = action_alpha,
+				}
+				else nil,
 		}, character.HumanoidRootPart.CFrame)
 
 		apply_cframe(character, rig)

@@ -23,6 +23,7 @@ export type Identity = {
 	keyframe_times: { number },
 	keyframe_poses: { Poses },
 	keyframe_holes: { [number]: { KeyframeHole } },
+	animated: { [number]: true },
 	length: number,
 }
 
@@ -92,9 +93,14 @@ function animation_asset.load_keyframe_sequence(
 	-- previous keyframe that had no holes, [limb_index]: keyframe_node_index
 	local no_holes: { [number]: number } = {}
 	local future_right: { [number]: true | nil } = {}
+	local animated: { [number]: true } = {}
 
 	for index, node in keyframe_nodes do
 		for limb_name, limb_index in limb_name_to_index do
+			if node.poses[limb_name] then
+				animated[limb_index] = true
+			end
+
 			-- if we are the first keyframe, we should fill in the default pose
 			if index == 1 and node.poses[limb_name] == nil then
 				node.poses[limb_name] = {
@@ -167,6 +173,7 @@ function animation_asset.load_keyframe_sequence(
 		keyframe_poses = keyframe_poses,
 		length = length,
 		keyframe_holes = keframe_holes,
+		animated = animated,
 	}
 end
 
