@@ -14,6 +14,10 @@ export type AnimationTrack = {
 	priority: number,
 }
 
+local function quat_dot(a_vector: vector, a_scalar: number, b_vector: vector, b_scalar: number)
+	return vector.dot(a_vector, b_vector) + (a_scalar * b_scalar)
+end
+
 local function quat_nlerp(
 	a_vector: vector,
 	a_scalar: number,
@@ -21,6 +25,10 @@ local function quat_nlerp(
 	b_scalar: number,
 	t: number
 ): (vector, number)
+	if quat_dot(a_vector, a_scalar, b_vector, b_scalar) < 0 then
+		b_vector, b_scalar = -b_vector, -b_scalar
+	end
+
 	local quat_vector = vector.lerp(a_vector, b_vector, t)
 	local quat_scalar = math.lerp(a_scalar, b_scalar, t)
 
