@@ -10,7 +10,7 @@ export type PoseNode = {
 }
 
 --- [1] = previous keyframe index
---- [2] = next keyframe index
+--- [2] = (next keyframe index)?
 export type KeyframeHole = { number }
 export type Poses = { PoseNode }
 
@@ -124,22 +124,20 @@ function animation_asset.load_keyframe_sequence(
 				end
 				future_right[limb_index] = true
 
-				-- if this is nil, the limb does not have any future keyframes
-				if right_pointer then
-					local hole = {
-						left_pointer,
-						right_pointer,
-					}
+				local hole = {
+					left_pointer,
+					right_pointer,
+				}
 
-					local limb_holes = keframe_holes[limb_index]
-					if limb_holes == nil then
-						limb_holes = {}
-						keframe_holes[limb_index] = limb_holes
-					end
+				local limb_holes = keframe_holes[limb_index]
+				if limb_holes == nil then
+					limb_holes = {}
+					keframe_holes[limb_index] = limb_holes
+				end
 
-					for fill_in = left_pointer + 1, right_pointer do
-						limb_holes[fill_in] = hole
-					end
+				-- if left_pointer, the limb does not have any future keyframes
+				for fill_in = left_pointer + 1, (right_pointer or #keyframe_nodes) do
+					limb_holes[fill_in] = hole
 				end
 			end
 		end

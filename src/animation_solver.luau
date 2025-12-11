@@ -120,7 +120,7 @@ local function animation_solver(
 			local time_after = pose_time_after
 			local pointer = animation.keyframe_holes[index]
 				and animation.keyframe_holes[index][high + 1]
-			if pointer then
+			if pointer and pointer[2] then
 				local right_pose_pointer = pointer[2]
 				right_pose = animation.keyframe_poses[right_pose_pointer][index]
 				time_after = keyframe_times[right_pose_pointer]
