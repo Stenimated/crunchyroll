@@ -102,6 +102,7 @@ for _, keyframe_sequence in
 		ReplicatedStorage.assets.wave_5_step,
 		ReplicatedStorage.assets.lift_left_arm,
 		ReplicatedStorage.assets.joint_animation,
+		ReplicatedStorage.assets.slide_spin,
 	}
 do
 	local character = spawn_character()

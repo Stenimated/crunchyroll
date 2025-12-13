@@ -41,12 +41,11 @@ local function recursive_tree_from_pose(poses: { [string]: PoseNode }, root_pose
 	local cframe = root_pose.CFrame
 	local axis, angle = cframe:ToAxisAngle()
 
-	local half_angle = angle / 2
+	local half_angle = angle * 0.5
 	local position = cframe.Position :: any
-	local quat_vector = axis * math.sin(half_angle) :: any
+	local quat_vector = math.sin(half_angle) * axis :: any
 	local quat_scalar = math.cos(half_angle)
 
-	-- TODO weird type error
 	poses[root_pose.Name] = {
 		position = position,
 		quat_vector = quat_vector,
