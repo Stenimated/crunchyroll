@@ -10,7 +10,7 @@ export type PoseNode = {
 }
 
 --- [1] = previous keyframe index
---- [2] = next keyframe index
+--- [2] = (next keyframe index)?
 export type KeyframeHole = { number }
 export type Poses = { PoseNode }
 
@@ -42,12 +42,11 @@ local function recursive_tree_from_pose(poses: { [string]: PoseNode }, root_pose
 	local cframe = root_pose.CFrame
 	local axis, angle = cframe:ToAxisAngle()
 
-	local half_angle = angle / 2
+	local half_angle = angle * 0.5
 	local position = cframe.Position :: any
-	local quat_vector = axis * math.sin(half_angle) :: any
+	local quat_vector = math.sin(half_angle) * axis :: any
 	local quat_scalar = math.cos(half_angle)
 
-	-- TODO weird type error
 	poses[root_pose.Name] = {
 		position = position,
 		quat_vector = quat_vector,
@@ -130,22 +129,20 @@ function animation_asset.load_keyframe_sequence(
 				end
 				future_right[limb_index] = true
 
-				-- if this is nil, the limb does not have any future keyframes
-				if right_pointer then
-					local hole = {
-						left_pointer,
-						right_pointer,
-					}
+				local hole = {
+					left_pointer,
+					right_pointer,
+				}
 
-					local limb_holes = keframe_holes[limb_index]
-					if limb_holes == nil then
-						limb_holes = {}
-						keframe_holes[limb_index] = limb_holes
-					end
+				local limb_holes = keframe_holes[limb_index]
+				if limb_holes == nil then
+					limb_holes = {}
+					keframe_holes[limb_index] = limb_holes
+				end
 
-					for fill_in = left_pointer + 1, right_pointer do
-						limb_holes[fill_in] = hole
-					end
+				-- if left_pointer, the limb does not have any future keyframes
+				for fill_in = left_pointer + 1, (right_pointer or #keyframe_nodes) do
+					limb_holes[fill_in] = hole
 				end
 			end
 		end
